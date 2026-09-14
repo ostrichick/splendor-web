@@ -1,32 +1,39 @@
-# React + TypeScript + Vite
+# 💎 Splendor Web (스플렌더 웹 보드게임)
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+반응이 빠르고(Zero-latency) 직관적인 인터페이스를 갖춘 웹 브라우저 기반 **스플렌더(Splendor)** 보드게임입니다.
+AI 대전, 한 기기 패스 앤 플레이(Hotseat), 실시간 온라인 멀티플레이어(WebSocket)를 모두 지원합니다.
 
-Currently, two official plugins are available:
+---
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+## 🎮 주요 기능
 
-## React Compiler
+- **1-Screen 무스크롤 레이아웃**: 귀족 타일, 개발 카드 마켓(Tier 1~3), 토큰 뱅크, 상대 현황, 내 인벤토리가 한눈에 들어오는 인터페이스.
+- **스마트 어포던스**: 구매 가능한 카드 골드 글로우 하이라이트, 부족한 보석 실시간 툴팁 계산.
+- **원클릭 토큰 픽업**: 드래그 앤 드롭 없이 칩을 클릭하여 바구니에 담고 규칙 검증 후 즉시 획득.
+- **전략적 AI 엔진**: 초급(Greedy), 중급(엔진 빌딩), 고급(승리 결정 카드 선점 예약 견제) 3단계 난이도.
+- **실시간 사운드 이펙트**: Web Audio API 신디사이저로 토큰 칩, 카드 구매, 예약, 턴 알림 사운드 무지연 재생.
+- **완전 공개 정보 뷰**: 상대방이 보유한 6종 보석 토큰의 개별 수량 및 예약한 카드 상세 정보 열람 지원.
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+---
 
-## Expanding the Oxlint configuration
+## 🛠 실행 방법
 
-If you are developing a production application, we recommend enabling type-aware lint rules by installing `oxlint-tsgolint` and editing `.oxlintrc.json`:
-
-```json
-{
-  "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["react", "typescript", "oxc"],
-  "options": {
-    "typeAware": true
-  },
-  "rules": {
-    "react/rules-of-hooks": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
-}
+### 로컬 개발 서버
+```bash
+npm install
+npm run dev
 ```
+브라우저에서 `http://localhost:5173` 접속
 
-See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rules) for the full list of rules and categories.
+### 실시간 멀티플레이 풀스택 서버
+```bash
+npm run build
+npm start
+```
+기본 포트 `3001`에서 프론트엔드와 WebSocket 서버 동시 실행
+
+### 단위 테스트
+```bash
+npm test
+```
+Vitest 기반 코어 게임 룰 및 AI 검증 테스트 11종 실행
