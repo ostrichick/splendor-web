@@ -29,6 +29,9 @@ export function App() {
   const [onlineMyPlayerId, setOnlineMyPlayerId] = useState<string | null>(null);
   const [onlineRoomCode, setOnlineRoomCode] = useState<string | null>(null);
 
+  // Hovered player to inspect opponent progress
+  const [hoveredPlayerId, setHoveredPlayerId] = useState<string | null>(null);
+
   // Track previous turn to trigger audio chimes
   const prevTurnRef = useRef<number | null>(null);
   const prevActivePlayerRef = useRef<number | null>(null);
@@ -353,7 +356,19 @@ export function App() {
           players={gameState.players}
           activePlayerIndex={gameState.activePlayerIndex}
           myPlayerId={humanPlayer.id}
+          hoveredPlayerId={hoveredPlayerId}
+          onHoverPlayer={setHoveredPlayerId}
         />
+
+        {/* Hover Inspection Status Banner */}
+        {hoveredPlayerId && (
+          <div className="w-full bg-yellow-500/15 border border-yellow-500/50 rounded-xl py-1.5 px-4 text-center text-xs font-mono text-yellow-300 flex items-center justify-center gap-2 shadow-sm animate-in fade-in duration-150">
+            <Sparkles size={14} className="text-yellow-400 animate-spin" />
+            <span>
+              <strong>{gameState.players.find((p) => p.id === hoveredPlayerId)?.name}</strong>님의 시점으로 귀족 달성도와 보너스 할인 현황을 미리보고 있습니다 (마우스를 떼면 복귀)
+            </span>
+          </div>
+        )}
 
         {/* Board Arena: Nobles (Left) + Market Cards (Center) + Token Bank (Right) */}
         <div className="flex flex-col lg:flex-row items-center lg:items-start justify-center gap-3 sm:gap-4 my-auto">
@@ -363,7 +378,8 @@ export function App() {
               <NobleTile
                 key={noble.id}
                 noble={noble}
-                player={activePlayer}
+                player={hoveredPlayerId ? gameState.players.find((p) => p.id === hoveredPlayerId) || activePlayer : activePlayer}
+                highlightedByHover={!!hoveredPlayerId}
                 onSelect={handleSelectNoble}
                 isSelectable={
                   gameState.phase === 'select_noble' &&
