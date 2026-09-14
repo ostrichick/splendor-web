@@ -144,8 +144,13 @@ export const PlayerDashboard: React.FC<PlayerDashboardProps> = ({
 
           {/* Permanent Discounts / Bonuses */}
           <div className="flex flex-col gap-1">
-            <span className="text-[11px] font-mono text-zinc-400">
-              영구 보너스 (개발 카드 할인)
+            <span className="text-[11px] font-mono text-zinc-400 flex items-center justify-between">
+              <span>영구 보너스 (카드 할인)</span>
+              {Object.values(player.bonuses).reduce((a, b) => a + b, 0) > 0 && (
+                <span className="text-emerald-400 font-bold">
+                  총 -{Object.values(player.bonuses).reduce((a, b) => a + b, 0)}개 할인 적용 중
+                </span>
+              )}
             </span>
             <div className="flex items-center gap-1.5 sm:gap-2 bg-zinc-950/60 p-1.5 rounded-xl border border-zinc-800">
               {GEM_COLORS.map((gem) => {
