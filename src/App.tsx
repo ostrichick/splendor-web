@@ -12,6 +12,8 @@ import { OpponentPanel } from './components/OpponentPanel';
 import { PlayerDashboard } from './components/PlayerDashboard';
 import { LobbyModal } from './components/LobbyModal';
 import { GameOverModal } from './components/GameOverModal';
+import { MobileTabNav, type MobileTab } from './components/MobileTabNav';
+import { TurnNotifier } from './utils/turnNotifier';
 import { Volume2, VolumeX, RotateCcw, HelpCircle, Layers, Sparkles, AlertTriangle, Bell } from 'lucide-react';
 import type { Socket } from 'socket.io-client';
 
@@ -23,6 +25,7 @@ export function App() {
   const [isAiThinking, setIsAiThinking] = useState<boolean>(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [showRulesModal, setShowRulesModal] = useState<boolean>(false);
+  const [mobileTab, setMobileTab] = useState<MobileTab>('market');
 
   // Online Multiplayer State
   const [onlineSocket, setOnlineSocket] = useState<Socket | null>(null);
@@ -84,6 +87,7 @@ export function App() {
 
   // Execute an action on current state
   const handleExecuteAction = (action: GameAction) => {
+    TurnNotifier.stop();
     if (!gameState) return;
 
     // If in online mode, forward to server
@@ -136,8 +140,9 @@ export function App() {
 
     if (prevActivePlayerRef.current !== null && prevActivePlayerRef.current !== activeIndex) {
       if (isHuman) {
-        // My turn has arrived! Play distinct alert bell
+        // My turn has arrived! Play distinct alert bell and browser notify
         sound.playTurnStart();
+        TurnNotifier.notify(activePlayer.name);
       } else {
         // Switched to another player's turn
         sound.playTurnSwitch();
@@ -349,16 +354,18 @@ export function App() {
         </div>
       )}
 
-      {/* 2. Main Game Viewport (Complete 1-Screen) */}
-      <main className="flex-1 max-w-7xl w-full mx-auto p-2 sm:p-3 flex flex-col gap-2.5 justify-center">
+      {/* 2. Main Game Viewport (Complete 1-Screen on Desktop, Tabbed on Mobile) */}
+      <main className="flex-1 max-w-7xl w-full mx-auto p-2 sm:p-3 flex flex-col gap-2.5 justify-center pb-20 md:pb-3">
         {/* Opponents Full Public Inventory Dashboard */}
-        <OpponentPanel
-          players={gameState.players}
-          activePlayerIndex={gameState.activePlayerIndex}
-          myPlayerId={humanPlayer.id}
-          hoveredPlayerId={hoveredPlayerId}
-          onHoverPlayer={setHoveredPlayerId}
-        />
+        <div className={mobileTab === 'opponents' ? 'block' : 'hidden md:block'}>
+          <OpponentPanel
+            players={gameState.players}
+            activePlayerIndex={gameState.activePlayerIndex}
+            myPlayerId={humanPlayer.id}
+            hoveredPlayerId={hoveredPlayerId}
+            onHoverPlayer={setHoveredPlayerId}
+          />
+        </div>
 
         {/* Hover Inspection Status Banner */}
         {hoveredPlayerId && (
@@ -371,9 +378,11 @@ export function App() {
         )}
 
         {/* Board Arena: Nobles (Left) + Market Cards (Center) + Token Bank (Right) */}
-        <div className="flex flex-col lg:flex-row items-center lg:items-start justify-center gap-3 sm:gap-4 my-auto">
+        <div className={`items-center lg:items-start justify-center gap-3 sm:gap-4 my-auto ${
+          mobileTab === 'market' ? 'flex flex-col lg:flex-row' : 'hidden md:flex flex-col lg:flex-row'
+        }`}>
           {/* Nobles Column */}
-          <div className="flex lg:flex-col flex-row gap-2 items-center justify-center">
+          <div className="flex lg:flex-col flex-row gap-2 items-center justify-center flex-wrap">
             {gameState.nobles.map((noble) => (
               <NobleTile
                 key={noble.id}
@@ -390,14 +399,14 @@ export function App() {
           </div>
 
           {/* Development Cards Market (Tiers 3, 2, 1) */}
-          <div className="flex flex-col gap-2 bg-zinc-950/50 p-2 sm:p-3 rounded-2xl border border-zinc-800/80 shadow-2xl">
+          <div className="flex flex-col gap-2 bg-zinc-950/50 p-2 sm:p-3 rounded-2xl border border-zinc-800/80 shadow-2xl overflow-x-auto max-w-full">
             {([3, 2, 1] as const).map((tier) => {
               const tierKey = `tier${tier}` as const;
               const cards = gameState.visibleCards[tierKey];
               const deckCount = gameState.decks[tierKey].length;
 
               return (
-                <div key={tier} className="flex items-center gap-2">
+                <div key={tier} className="flex items-center gap-2 min-w-max">
                   {/* Deck Pile (Can be clicked to blind reserve) */}
                   <div
                     onClick={() =>
@@ -411,9 +420,7 @@ export function App() {
                         : tier === 2
                         ? 'bg-gradient-to-b from-amber-900 to-amber-950 border-amber-500/50'
                         : 'bg-gradient-to-b from-emerald-900 to-emerald-950 border-emerald-500/50'}
-                      ${isHumanTurn && deckCount > 0
-                        ? 'hover:scale-105 cursor-pointer shadow-md hover:border-amber-400'
-                        : 'opacity-80'}
+                      ${isHumanTurn && deckCount > 0 ? 'cursor-pointer hover:scale-105 shadow-lg' : 'opacity-60'}
                     `}
                     title={
                       deckCount > 0
@@ -466,7 +473,7 @@ export function App() {
       </main>
 
       {/* 3. Bottom Player Dashboard */}
-      <footer className="w-full">
+      <footer className={`w-full ${mobileTab === 'my-dashboard' ? 'block' : 'hidden md:block'}`}>
         <PlayerDashboard
           player={humanPlayer}
           isMyTurn={isHumanTurn && !isAiThinking}
@@ -479,6 +486,13 @@ export function App() {
           onDiscardTokens={handleDiscardTokens}
         />
       </footer>
+
+      {/* Mobile Bottom Tab Navigator */}
+      <MobileTabNav
+        activeTab={mobileTab}
+        onSelectTab={setMobileTab}
+        opponentCount={gameState.players.length - 1}
+      />
 
       {/* Game Over Modal */}
       {gameState.phase === 'game_over' && (
