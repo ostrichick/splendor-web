@@ -20,6 +20,7 @@ dist-ssr
 *.key
 *.p12
 *.pfx
+*.p8
 *.jks
 *.keystore
 credentials*.json
@@ -42,4 +43,6 @@ service_account*.json
 .netrc
 .pypirc
 id_rsa
+id_dsa
+id_ecdsa
 id_ed25519
