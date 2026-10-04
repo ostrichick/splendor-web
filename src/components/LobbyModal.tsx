@@ -32,6 +32,8 @@ export const LobbyModal: React.FC<LobbyModalProps> = ({ onStartGame, onOnlineGam
   // Online Multiplayer State
   const [socket, setSocket] = useState<Socket | null>(null);
   const [roomCodeInput, setRoomCodeInput] = useState<string>('');
+  const [joinSecretInput, setJoinSecretInput] = useState<string>('');
+  const [roomJoinSecret, setRoomJoinSecret] = useState<string | null>(null);
   const [currentRoom, setCurrentRoom] = useState<RoomData | null>(null);
   const [myPlayerId, setMyPlayerId] = useState<string | null>(null);
   const [onlineError, setOnlineError] = useState<string | null>(null);
@@ -49,14 +51,16 @@ export const LobbyModal: React.FC<LobbyModalProps> = ({ onStartGame, onOnlineGam
         setOnlineError('멀티플레이 서버에 연결할 수 없습니다. (포트 3001 서버 실행 필요)');
       });
 
-      newSocket.on('room_created', ({ roomCode, playerId, room }: { roomCode: string; playerId: string; room: RoomData }) => {
+      newSocket.on('room_created', ({ joinSecret, playerId, room }: { joinSecret: string; playerId: string; room: RoomData }) => {
         setCurrentRoom(room);
+        setRoomJoinSecret(joinSecret);
         setMyPlayerId(playerId);
         setOnlineError(null);
       });
 
       newSocket.on('room_joined', ({ playerId, room }: { playerId: string; room: RoomData }) => {
         setCurrentRoom(room);
+        setRoomJoinSecret(null);
         setMyPlayerId(playerId);
         setOnlineError(null);
       });
@@ -117,9 +121,13 @@ export const LobbyModal: React.FC<LobbyModalProps> = ({ onStartGame, onOnlineGam
   };
 
   const handleJoinOnlineRoom = () => {
-    if (!socket || !roomCodeInput.trim()) return;
+    if (!socket || !roomCodeInput.trim() || !joinSecretInput.trim()) return;
     setOnlineError(null);
-    socket.emit('join_room', { roomCode: roomCodeInput.trim(), playerName });
+    socket.emit('join_room', {
+      roomCode: roomCodeInput.trim(),
+      joinSecret: joinSecretInput.trim(),
+      playerName,
+    });
   };
 
   const handleAddAiToOnlineRoom = () => {
@@ -134,7 +142,10 @@ export const LobbyModal: React.FC<LobbyModalProps> = ({ onStartGame, onOnlineGam
 
   const handleCopyCode = () => {
     if (!currentRoom) return;
-    navigator.clipboard.writeText(currentRoom.code);
+    const invitation = roomJoinSecret
+      ? `${currentRoom.code} ${roomJoinSecret}`
+      : currentRoom.code;
+    navigator.clipboard.writeText(invitation);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
@@ -302,19 +313,28 @@ export const LobbyModal: React.FC<LobbyModalProps> = ({ onStartGame, onOnlineGam
                   <div className="h-px bg-zinc-800 flex-1" />
                 </div>
 
-                <div className="flex gap-2">
+                <div className="grid grid-cols-2 gap-2">
                   <input
                     type="text"
-                    maxLength={4}
+                    maxLength={8}
                     value={roomCodeInput}
                     onChange={(e) => setRoomCodeInput(e.target.value.toUpperCase())}
-                    placeholder="방 코드 (예: ABCD)"
-                    className="flex-1 px-3 py-2 rounded-lg bg-zinc-950 border border-zinc-800 text-white text-sm uppercase font-mono tracking-widest text-center"
+                    placeholder="8자리 방 코드"
+                    className="px-3 py-2 rounded-lg bg-zinc-950 border border-zinc-800 text-white text-sm uppercase font-mono tracking-widest text-center"
+                  />
+                  <input
+                    type="password"
+                    maxLength={8}
+                    value={joinSecretInput}
+                    onChange={(e) => setJoinSecretInput(e.target.value.toUpperCase())}
+                    placeholder="8자리 참가 비밀번호"
+                    className="px-3 py-2 rounded-lg bg-zinc-950 border border-zinc-800 text-white text-sm uppercase font-mono tracking-widest text-center"
                   />
                   <button
                     type="button"
                     onClick={handleJoinOnlineRoom}
-                    className="px-4 py-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-white text-xs font-bold cursor-pointer transition-all border border-zinc-700"
+                    disabled={!roomCodeInput.trim() || !joinSecretInput.trim()}
+                    className="col-span-2 px-4 py-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-bold cursor-pointer transition-all border border-zinc-700"
                   >
                     참가
                   </button>
@@ -336,9 +356,18 @@ export const LobbyModal: React.FC<LobbyModalProps> = ({ onStartGame, onOnlineGam
                     className="flex items-center gap-1 text-xs text-zinc-400 hover:text-zinc-200 cursor-pointer font-mono"
                   >
                     {copied ? <Check size={14} className="text-emerald-400" /> : <Copy size={14} />}
-                    {copied ? '복사됨' : '코드 복사'}
+                    {copied ? '복사됨' : '초대 정보 복사'}
                   </button>
                 </div>
+
+                {isHost && roomJoinSecret && (
+                  <div className="flex items-center justify-between rounded-lg bg-zinc-900 border border-zinc-800 px-3 py-2">
+                    <span className="text-[11px] font-mono text-zinc-500">참가 비밀번호:</span>
+                    <span className="text-sm font-black font-mono tracking-widest text-emerald-400">
+                      {roomJoinSecret}
+                    </span>
+                  </div>
+                )}
 
                 {/* Player List */}
                 <div className="space-y-1.5">

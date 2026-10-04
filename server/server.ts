@@ -2,13 +2,35 @@ import express from 'express';
 import http from 'http';
 import path from 'path';
 import { Server } from 'socket.io';
-import cors from 'cors';
+import cors, { type CorsOptions } from 'cors';
 import { createInitialGameState, applyAction, PlayerConfig } from '../src/engine/game';
 import { computeBestAction } from '../src/engine/ai';
 import { GameAction, GameState } from '../src/engine/types';
+import {
+  JOIN_ATTEMPT_LIMIT,
+  JOIN_ATTEMPT_WINDOW_MS,
+  SlidingWindowRateLimiter,
+  generateJoinSecret,
+  generateRoomCode,
+  hashJoinSecret,
+  isOriginAllowed,
+  parseAllowedOrigins,
+  verifyJoinSecret,
+} from './security';
 
 const app = express();
-app.use(cors());
+const allowedOrigins = parseAllowedOrigins(process.env.ALLOWED_ORIGINS, process.env.NODE_ENV);
+const corsOptions: CorsOptions = {
+  origin(origin, callback) {
+    if (isOriginAllowed(origin, allowedOrigins)) {
+      callback(null, true);
+      return;
+    }
+    callback(new Error('Origin is not allowed by CORS policy.'));
+  },
+  methods: ['GET', 'POST'],
+};
+app.use(cors(corsOptions));
 
 // Serve static assets from Vite build
 const distPath = path.join(process.cwd(), 'dist');
@@ -17,7 +39,7 @@ app.use(express.static(distPath));
 const server = http.createServer(app);
 const io = new Server(server, {
   cors: {
-    origin: '*',
+    origin: allowedOrigins,
     methods: ['GET', 'POST'],
   },
 });
@@ -39,15 +61,8 @@ interface Room {
 }
 
 const rooms: Map<string, Room> = new Map();
-
-function generateRoomCode(): string {
-  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-  let code = '';
-  for (let i = 0; i < 4; i++) {
-    code += chars.charAt(Math.floor(Math.random() * chars.length));
-  }
-  return code;
-}
+const roomJoinSecretHashes: Map<string, string> = new Map();
+const joinRateLimiter = new SlidingWindowRateLimiter(JOIN_ATTEMPT_LIMIT, JOIN_ATTEMPT_WINDOW_MS);
 
 // Check and trigger AI move if current player in game is AI
 function checkAndRunAiMove(roomCode: string) {
@@ -79,7 +94,9 @@ io.on('connection', (socket) => {
 
   // Create room
   socket.on('create_room', ({ playerName }: { playerName: string }) => {
-    const roomCode = generateRoomCode();
+    let roomCode = generateRoomCode();
+    while (rooms.has(roomCode)) roomCode = generateRoomCode();
+    const joinSecret = generateJoinSecret();
     const playerId = `p_${socket.id.substring(0, 5)}`;
 
     const newRoom: Room = {
@@ -98,24 +115,35 @@ io.on('connection', (socket) => {
     };
 
     rooms.set(roomCode, newRoom);
+    roomJoinSecretHashes.set(roomCode, hashJoinSecret(joinSecret));
     currentRoomCode = roomCode;
     currentPlayerId = playerId;
     socket.join(roomCode);
 
     socket.emit('room_created', {
       roomCode,
+      joinSecret,
       playerId,
       room: newRoom,
     });
   });
 
   // Join room
-  socket.on('join_room', ({ roomCode, playerName }: { roomCode: string; playerName: string }) => {
+  socket.on('join_room', ({ roomCode, joinSecret, playerName }: { roomCode: string; joinSecret: string; playerName: string }) => {
+    const clientKey = socket.handshake.address || socket.id;
+    const rateLimit = joinRateLimiter.attempt(clientKey);
+    if (!rateLimit.allowed) {
+      const retrySeconds = Math.ceil(rateLimit.retryAfterMs / 1000);
+      socket.emit('error_message', `참가 시도가 너무 많습니다. ${retrySeconds}초 후 다시 시도해주세요.`);
+      return;
+    }
+
     const code = roomCode.toUpperCase().trim();
     const room = rooms.get(code);
+    const expectedSecretHash = roomJoinSecretHashes.get(code);
 
-    if (!room) {
-      socket.emit('error_message', '방을 찾을 수 없습니다.');
+    if (!room || !expectedSecretHash || !verifyJoinSecret(joinSecret, expectedSecretHash)) {
+      socket.emit('error_message', '방 코드 또는 참가 비밀번호가 올바르지 않습니다.');
       return;
     }
 
@@ -139,6 +167,7 @@ io.on('connection', (socket) => {
     };
 
     room.players.push(newPlayer);
+    joinRateLimiter.reset(clientKey);
     currentRoomCode = code;
     currentPlayerId = playerId;
     socket.join(code);
@@ -237,6 +266,7 @@ io.on('connection', (socket) => {
       room.players = room.players.filter((p) => p.socketId !== socket.id);
       if (room.players.length === 0) {
         rooms.delete(currentRoomCode);
+        roomJoinSecretHashes.delete(currentRoomCode);
       } else {
         if (!room.players.some((p) => p.isHost)) {
           room.players[0].isHost = true;
