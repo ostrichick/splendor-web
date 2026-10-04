@@ -35,6 +35,8 @@ jobs:
 
       - name: Build project
         run: npm run build
+        env:
+          VITE_SERVER_URL: https://splendor-web-yrrr.onrender.com
 
       - name: Setup Pages
         uses: actions/configure-pages@v5

@@ -6,6 +6,10 @@ export const JOIN_ATTEMPT_LIMIT = 6;
 export const JOIN_ATTEMPT_WINDOW_MS = 60_000;
 
 const TOKEN_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+const DEFAULT_PRODUCTION_ORIGINS = [
+  'https://ostrichick.github.io',
+  'https://splendor-web-yrrr.onrender.com',
+];
 
 function randomToken(length: number): string {
   let value = '';
@@ -59,7 +63,7 @@ export function parseAllowedOrigins(raw: string | undefined, nodeEnv: string | u
     return [...new Set(entries.map(normalizeOrigin).filter((value): value is string => Boolean(value)))];
   }
 
-  if (nodeEnv === 'production') return [];
+  if (nodeEnv === 'production') return DEFAULT_PRODUCTION_ORIGINS;
   return [
     'http://localhost:5173',
     'http://127.0.0.1:5173',

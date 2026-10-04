@@ -11,4 +11,4 @@ services:
       - key: NODE_ENV
         value: production
       - key: ALLOWED_ORIGINS
-        value: https://splendor-web.onrender.com
+        value: https://ostrichick.github.io,https://splendor-web-yrrr.onrender.com

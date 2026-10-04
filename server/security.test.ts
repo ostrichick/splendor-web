@@ -27,9 +27,12 @@ describe('multiplayer security helpers', () => {
     expect(verifyJoinSecret('WRONG999', digest)).toBe(false);
   });
 
-  it('rejects wildcard CORS and defaults production to no cross-origin access', () => {
+  it('rejects wildcard CORS and uses only the deployed production origins by default', () => {
     expect(() => parseAllowedOrigins('*', 'production')).toThrow(/not permitted/);
-    expect(parseAllowedOrigins(undefined, 'production')).toEqual([]);
+    expect(parseAllowedOrigins(undefined, 'production')).toEqual([
+      'https://ostrichick.github.io',
+      'https://splendor-web-yrrr.onrender.com',
+    ]);
     expect(parseAllowedOrigins('https://game.example, https://admin.example/', 'production')).toEqual([
       'https://game.example',
       'https://admin.example',
