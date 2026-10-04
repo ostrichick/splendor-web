@@ -38,3 +38,8 @@ service-account*.json
 *.sw?
 
 .vercel
+service_account*.json
+.netrc
+.pypirc
+id_rsa
+id_ed25519
