@@ -7,9 +7,12 @@ import {
   SlidingWindowRateLimiter,
   generateJoinSecret,
   generateRoomCode,
+  isAiDifficulty,
   hashJoinSecret,
   isOriginAllowed,
+  parseRoomCode,
   parseAllowedOrigins,
+  safePlayerName,
   verifyJoinSecret,
 } from './security';
 
@@ -17,6 +20,19 @@ describe('multiplayer security helpers', () => {
   it('generates long room codes and join secrets from the unambiguous alphabet', () => {
     expect(generateRoomCode()).toMatch(new RegExp(`^[A-HJ-NP-Z2-9]{${ROOM_CODE_LENGTH}}$`));
     expect(generateJoinSecret()).toMatch(new RegExp(`^[A-HJ-NP-Z2-9]{${JOIN_SECRET_LENGTH}}$`));
+  });
+
+  it('validates malformed socket room codes and bounds untrusted player names', () => {
+    expect(parseRoomCode(' abcd2345 ')).toBe('ABCD2345');
+    for (const input of [null, undefined, {}, [], 12345, 'invalid!', 'A'.repeat(500)]) {
+      expect(parseRoomCode(input)).toBeNull();
+    }
+    expect(safePlayerName(null, 'Host')).toBe('Host');
+    expect(safePlayerName('  ', 'Host')).toBe('Host');
+    expect(safePlayerName('a'.repeat(1000), 'Host')).toHaveLength(40);
+    expect(isAiDifficulty('easy')).toBe(true);
+    expect(isAiDifficulty('expert')).toBe(false);
+    expect(isAiDifficulty({})).toBe(false);
   });
 
   it('verifies join secrets without storing plaintext', () => {
