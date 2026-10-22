@@ -269,7 +269,15 @@ io.on('connection', (socket) => {
       return;
     }
 
-    const result = applyAction(room.gameState, action);
+    // Socket payloads are untrusted. Invalid nested action fields can throw inside
+    // the game engine; do not let one client terminate the Node process.
+    let result: ReturnType<typeof applyAction>;
+    try {
+      result = applyAction(room.gameState, action);
+    } catch {
+      socket.emit('error_message', '잘못된 게임 동작입니다.');
+      return;
+    }
     if (result.error) {
       socket.emit('error_message', result.error);
       return;
