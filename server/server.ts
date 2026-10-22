@@ -14,7 +14,10 @@ import {
   generateRoomCode,
   hashJoinSecret,
   isOriginAllowed,
+  isAiDifficulty,
+  parseRoomCode,
   parseAllowedOrigins,
+  safePlayerName,
   verifyJoinSecret,
 } from './security';
 
@@ -93,7 +96,13 @@ io.on('connection', (socket) => {
   let currentPlayerId: string | null = null;
 
   // Create room
-  socket.on('create_room', ({ playerName }: { playerName: string }) => {
+  socket.on('create_room', (payload: unknown) => {
+    if (currentRoomCode) {
+      socket.emit('error_message', '이미 방에 참가 중입니다.');
+      return;
+    }
+    const playerName = payload && typeof payload === 'object' && 'playerName' in payload
+      ? payload.playerName : undefined;
     let roomCode = generateRoomCode();
     while (rooms.has(roomCode)) roomCode = generateRoomCode();
     const joinSecret = generateJoinSecret();
@@ -104,7 +113,7 @@ io.on('connection', (socket) => {
       players: [
         {
           id: playerId,
-          name: playerName || 'Host',
+          name: safePlayerName(playerName, 'Host'),
           socketId: socket.id,
           isHost: true,
           isAi: false,
@@ -129,7 +138,12 @@ io.on('connection', (socket) => {
   });
 
   // Join room
-  socket.on('join_room', ({ roomCode, joinSecret, playerName }: { roomCode: string; joinSecret: string; playerName: string }) => {
+  socket.on('join_room', (payload: unknown) => {
+    if (currentRoomCode) {
+      socket.emit('error_message', '이미 방에 참가 중입니다.');
+      return;
+    }
+    const input = payload && typeof payload === 'object' ? payload as Record<string, unknown> : {};
     const clientKey = socket.handshake.address || socket.id;
     const rateLimit = joinRateLimiter.attempt(clientKey);
     if (!rateLimit.allowed) {
@@ -138,11 +152,15 @@ io.on('connection', (socket) => {
       return;
     }
 
-    const code = roomCode.toUpperCase().trim();
+    const code = parseRoomCode(input.roomCode);
+    if (!code) {
+      socket.emit('error_message', '방 코드 또는 참가 비밀번호가 올바르지 않습니다.');
+      return;
+    }
     const room = rooms.get(code);
     const expectedSecretHash = roomJoinSecretHashes.get(code);
 
-    if (!room || !expectedSecretHash || !verifyJoinSecret(joinSecret, expectedSecretHash)) {
+    if (!room || !expectedSecretHash || !verifyJoinSecret(input.joinSecret, expectedSecretHash)) {
       socket.emit('error_message', '방 코드 또는 참가 비밀번호가 올바르지 않습니다.');
       return;
     }
@@ -160,7 +178,7 @@ io.on('connection', (socket) => {
     const playerId = `p_${socket.id.substring(0, 5)}`;
     const newPlayer: RoomPlayer = {
       id: playerId,
-      name: playerName || `Player ${room.players.length + 1}`,
+      name: safePlayerName(input.playerName, `Player ${room.players.length + 1}`),
       socketId: socket.id,
       isHost: false,
       isAi: false,
@@ -182,7 +200,13 @@ io.on('connection', (socket) => {
   });
 
   // Add AI Bot to room (Host only)
-  socket.on('add_ai', ({ difficulty }: { difficulty: 'easy' | 'normal' | 'hard' }) => {
+  socket.on('add_ai', (payload: unknown) => {
+    const difficulty = payload && typeof payload === 'object' && 'difficulty' in payload
+      ? payload.difficulty : undefined;
+    if (!isAiDifficulty(difficulty)) {
+      socket.emit('error_message', '잘못된 AI 난이도입니다.');
+      return;
+    }
     if (!currentRoomCode) return;
     const room = rooms.get(currentRoomCode);
     if (!room || room.status !== 'lobby' || room.players.length >= 4) return;
@@ -231,6 +255,10 @@ io.on('connection', (socket) => {
 
   // Player sends game action
   socket.on('send_action', (action: GameAction) => {
+    if (!action || typeof action !== 'object' || typeof action.type !== 'string') {
+      socket.emit('error_message', '잘못된 게임 동작입니다.');
+      return;
+    }
     if (!currentRoomCode) return;
     const room = rooms.get(currentRoomCode);
     if (!room || !room.gameState || room.status !== 'playing') return;
@@ -261,6 +289,16 @@ io.on('connection', (socket) => {
     if (!currentRoomCode) return;
     const room = rooms.get(currentRoomCode);
     if (!room) return;
+
+    // Abandoned active rooms otherwise remain in memory indefinitely.
+    if (room.status !== 'lobby') {
+      const remainingHuman = room.players.some((p) => !p.isAi && p.socketId !== socket.id && p.socketId);
+      if (!remainingHuman) {
+        rooms.delete(currentRoomCode);
+        roomJoinSecretHashes.delete(currentRoomCode);
+      }
+      return;
+    }
 
     if (room.status === 'lobby') {
       room.players = room.players.filter((p) => p.socketId !== socket.id);

@@ -6,6 +6,7 @@ export const JOIN_ATTEMPT_LIMIT = 6;
 export const JOIN_ATTEMPT_WINDOW_MS = 60_000;
 
 const TOKEN_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+const ROOM_CODE_PATTERN = new RegExp(`^[A-HJ-NP-Z2-9]{${ROOM_CODE_LENGTH}}$`);
 const DEFAULT_PRODUCTION_ORIGINS = [
   'https://ostrichick.github.io',
   'https://splendor-web-yrrr.onrender.com',
@@ -21,6 +22,21 @@ function randomToken(length: number): string {
 
 export function generateRoomCode(): string {
   return randomToken(ROOM_CODE_LENGTH);
+}
+
+export function parseRoomCode(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  const code = value.trim().toUpperCase();
+  return ROOM_CODE_PATTERN.test(code) ? code : null;
+}
+
+export function safePlayerName(value: unknown, fallback: string): string {
+  if (typeof value !== 'string') return fallback;
+  return value.trim().slice(0, 40) || fallback;
+}
+
+export function isAiDifficulty(value: unknown): value is 'easy' | 'normal' | 'hard' {
+  return value === 'easy' || value === 'normal' || value === 'hard';
 }
 
 export function generateJoinSecret(): string {
